@@ -35,77 +35,78 @@ import org.slf4j.LoggerFactory;
  * zabkv starts here.
  */
 public final class Main {
-  private static final Logger LOG = LoggerFactory.getLogger(Main.class);
+    private static final Logger LOG = LoggerFactory.getLogger(Main.class);
 
-  private Main() {
-  }
-
-  public static void main(String[] args) throws Exception {
-    // Options for command arguments.
-    Options options = new Options();
-
-    Option port = OptionBuilder.withArgName("port")
-                               .hasArg(true)
-                               .isRequired(true)
-                               .withDescription("port number")
-                               .create("port");
-
-    Option addr = OptionBuilder.withArgName("addr")
-                               .hasArg(true)
-                               .withDescription("addr (ip:port) for Zab.")
-                               .create("addr");
-
-    Option join = OptionBuilder.withArgName("join")
-                               .hasArg(true)
-                               .withDescription("the addr of server to join.")
-                               .create("join");
-
-    Option dir = OptionBuilder.withArgName("dir")
-                              .hasArg(true)
-                              .withDescription("the directory for logs.")
-                              .create("dir");
-
-    Option help = OptionBuilder.withArgName("h")
-                               .hasArg(false)
-                               .withLongOpt("help")
-                               .withDescription("print out usages.")
-                               .create("h");
-
-    options.addOption(port)
-           .addOption(addr)
-           .addOption(join)
-           .addOption(dir)
-           .addOption(help);
-
-    CommandLineParser parser = new BasicParser();
-    CommandLine cmd;
-
-    try {
-      cmd = parser.parse(options, args);
-      if (cmd.hasOption("h")) {
-        HelpFormatter formatter = new HelpFormatter();
-        formatter.printHelp("zabkv", options);
-        return;
-      }
-    } catch (ParseException exp) {
-      HelpFormatter formatter = new HelpFormatter();
-      formatter.printHelp("zabkv", options);
-      return;
+    private Main() {
     }
 
-    Database db = new Database(cmd.getOptionValue("addr"),
-                               cmd.getOptionValue("join"),
-                               cmd.getOptionValue("dir"));
+    public static void main(String[] args) throws Exception {
+        // Options for command arguments.
+        Options options = new Options();
 
-    Server server = new Server(Integer.parseInt(cmd.getOptionValue("port")));
-    ServletHandler handler = new ServletHandler();
-    server.setHandler(handler);
-    // Handlers with the initialization order >= 0 get initialized on startup.
-    // If you don't specify this, Zab doesn't get initialized until the first
-    // request is received.
-    ServletHolder holder = new ServletHolder(new RequestHandler(db));
-    handler.addServletWithMapping(holder, "/*");
-    server.start();
-    server.join();
-  }
+        Option port = OptionBuilder.withArgName("port")
+                .hasArg(true)
+                .isRequired(true)
+                .withDescription("port number")
+                .create("port");
+
+        Option addr = OptionBuilder.withArgName("addr")
+                .hasArg(true)
+                .withDescription("addr (ip:port) for Zab.")
+                .create("addr");
+
+        Option join = OptionBuilder.withArgName("join")
+                .hasArg(true)
+                .withDescription("the addr of server to join.")
+                .create("join");
+
+        Option dir = OptionBuilder.withArgName("dir")
+                .hasArg(true)
+                .withDescription("the directory for logs.")
+                .create("dir");
+
+        Option help = OptionBuilder.withArgName("h")
+                .hasArg(false)
+                .withLongOpt("help")
+                .withDescription("print out usages.")
+                .create("h");
+
+        options.addOption(port)
+                .addOption(addr)
+                .addOption(join)
+                .addOption(dir)
+                .addOption(help);
+
+        CommandLineParser parser = new BasicParser();
+        CommandLine cmd;
+
+
+
+        try {
+            cmd = parser.parse(options, args);
+            if (cmd.hasOption("h")) {
+                HelpFormatter formatter = new HelpFormatter();
+                formatter.printHelp("zabkv", options);
+                return;
+            }
+        } catch (ParseException exp) {
+            HelpFormatter formatter = new HelpFormatter();
+            formatter.printHelp("zabkv", options);
+            return;
+        }
+        int serverPort = Integer.parseInt(cmd.getOptionValue("port"));
+
+
+        Database db = new Database(cmd.getOptionValue("addr"),
+                cmd.getOptionValue("join"),
+                cmd.getOptionValue("dir"));
+
+        Server server = new Server(serverPort);
+        ServletHandler handler = new ServletHandler();
+        server.setHandler(handler);
+        ServletHolder holder = new ServletHolder(new RequestHandler(db));
+        handler.addServletWithMapping(holder, "/*");
+        server.start();
+        server.join();
+    }
 }

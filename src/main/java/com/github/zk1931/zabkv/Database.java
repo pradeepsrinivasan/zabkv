@@ -43,161 +43,162 @@ import org.slf4j.LoggerFactory;
  * StateMachine of the ZabKV.
  */
 public final class Database implements StateMachine {
-  private static final Logger LOG = LoggerFactory.getLogger(Database.class);
+    private static final Logger LOG = LoggerFactory.getLogger(Database.class);
 
-  private Zab zab;
+    private Zab zab;
 
-  private String serverId;
+    private String serverId;
 
-  private final ZabConfig config = new ZabConfig();
+    private final ZabConfig config = new ZabConfig();
 
-  private ConcurrentSkipListMap<String, byte[]> kvstore =
-    new ConcurrentSkipListMap<>();
+    private ConcurrentSkipListMap<String, byte[]> kvstore =
+            new ConcurrentSkipListMap<>();
 
-  public Database(String serverId, String joinPeer, String logDir) {
-    try {
-      this.serverId = serverId;
-      if (this.serverId != null && joinPeer == null) {
-        // It's the first server in cluster, joins itself.
-        joinPeer = this.serverId;
-      }
-      if (this.serverId != null && logDir == null) {
-        // If user doesn't specify log directory, default one is
-        // serverId in current directory.
-        logDir = this.serverId;
-      }
-      config.setLogDir(logDir);
-      if (joinPeer != null) {
-        zab = new Zab(this, config, this.serverId, joinPeer);
-      } else {
-        // Recovers from log directory.
-        zab = new Zab(this, config);
-      }
-      this.serverId = zab.getServerId();
-    } catch (Exception ex) {
-      LOG.error("Caught exception : ", ex);
-      throw new RuntimeException();
+    public Database(String serverId, String joinPeer, String logDir) {
+        try {
+            this.serverId = serverId;
+            if (this.serverId != null && joinPeer == null) {
+                // It's the first server in cluster, joins itself.
+                joinPeer = this.serverId;
+            }
+            if (this.serverId != null && logDir == null) {
+                // If user doesn't specify log directory, default one is
+                // serverId in current directory.
+                logDir = this.serverId;
+            }
+            config.setLogDir(logDir);
+            if (joinPeer != null) {
+                zab = new Zab(this, config, this.serverId, joinPeer);
+            } else {
+                // Recovers from log directory.
+                zab = new Zab(this, config);
+            }
+            this.serverId = zab.getServerId();
+        } catch (Exception ex) {
+            LOG.error("Caught exception : ", ex);
+            throw new RuntimeException();
+        }
     }
-  }
 
-  public String get(String key) {
-    GsonBuilder builder = new GsonBuilder();
-    Gson gson = builder.create();
-    Map<String, Object> map = new HashMap<>();
-    map.put(key, (Object)kvstore.get(key));
-    return gson.toJson(map);
-  }
-
-  public void put(Map<String, byte[]> updates) {
-    kvstore.putAll(updates);
-  }
-
-  public String getAll() throws IOException {
-    GsonBuilder builder = new GsonBuilder();
-    Gson gson = builder.create();
-    return gson.toJson(kvstore);
-  }
-
-  public void delete(String key) {
-    if (key.equals("")) {
-      // Deletes whole database.
-      this.kvstore.clear();
-    } else {
-      this.kvstore.remove(key);
+    public String get(String key) {
+        GsonBuilder builder = new GsonBuilder();
+        Gson gson = builder.create();
+        Map<String, Object> map = new HashMap<>();
+        map.put(key, (Object)kvstore.get(key));
+        return gson.toJson(map);
     }
-  }
 
-  public boolean add(Command command, AsyncContext context) {
-    try {
-      ByteBuffer bb = Serializer.serialize(command);
-      try {
-        zab.send(bb, context);
-      } catch (ZabException ex) {
-        return false;
-      }
-    } catch (IOException ex) {
-      return false;
+    public void put(Map<String, byte[]> updates) {
+        kvstore.putAll(updates);
     }
-    return true;
-  }
 
-  @Override
-  public ByteBuffer preprocess(Zxid zxid, ByteBuffer message) {
-    LOG.debug("Preprocessing a message: {}", message);
-    return message;
-  }
-
-  @Override
-  public void deliver(Zxid zxid, ByteBuffer stateUpdate, String clientId,
-                      Object ctx) {
-    Command command = Serializer.deserialize(stateUpdate);
-    command.execute(this);
-    AsyncContext context = (AsyncContext)ctx;
-    if (context == null) {
-      // This request is sent from other instance.
-      return;
+    public String getAll() throws IOException {
+        GsonBuilder builder = new GsonBuilder();
+        Gson gson = builder.create();
+        return gson.toJson(kvstore);
     }
-    HttpServletResponse response =
-      (HttpServletResponse)(context.getResponse());
-    response.setContentType("text/html");
-    response.setStatus(HttpServletResponse.SC_OK);
-    context.complete();
-  }
 
-  @Override
-  public void flushed(ByteBuffer request, Object ctx) {
-  }
-
-  @Override
-  public void save(OutputStream os) {
-    // No support for snapshot yet.
-  }
-
-  @Override
-  public void restore(InputStream is) {
-    // No support for snapshot yet.
-  }
-
-  @Override
-  public void snapshotDone(String filePath, Object ctx) {
-  }
-
-  @Override
-  public void removed(String peerId, Object ctx) {
-  }
-
-  @Override
-  public void recovering(PendingRequests pendingRequests) {
-    LOG.info("Recovering...");
-    // Returns error for all pending requests.
-    for (Tuple tp : pendingRequests.pendingSends) {
-      AsyncContext context = (AsyncContext)tp.param;
-      HttpServletResponse response =
-        (HttpServletResponse)(context.getResponse());
-      response.setContentType("text/html");
-      response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-      context.complete();
+    public void delete(String key) {
+        if (key.equals("")) {
+            // Deletes whole database.
+            this.kvstore.clear();
+        } else {
+            this.kvstore.remove(key);
+        }
     }
-  }
 
-  @Override
-  public void leading(Set<String> activeFollowers, Set<String> clusterMembers) {
-    LOG.info("LEADING with active followers : ");
-    for (String peer : activeFollowers) {
-      LOG.info(" -- {}", peer);
+    public boolean add(Command command, AsyncContext context) {
+        try {
+            ByteBuffer bb = Serializer.serialize(command);
+            try {
+                zab.send(bb, context);
+            } catch (ZabException ex) {
+                return false;
+            }
+        } catch (IOException ex) {
+            return false;
+        }
+        return true;
     }
-    LOG.info("Cluster configuration change : ", clusterMembers.size());
-    for (String peer : clusterMembers) {
-      LOG.info(" -- {}", peer);
-    }
-  }
 
-  @Override
-  public void following(String leader, Set<String> clusterMembers) {
-    LOG.info("FOLLOWING {}", leader);
-    LOG.info("Cluster configuration change : ", clusterMembers.size());
-    for (String peer : clusterMembers) {
-      LOG.info(" -- {}", peer);
+    @Override
+    public ByteBuffer preprocess(Zxid zxid, ByteBuffer message) {
+        LOG.debug("Preprocessing a message: {}", message);
+        return message;
     }
-  }
+
+    @Override
+    public void deliver(Zxid zxid, ByteBuffer stateUpdate, String clientId,
+                        Object ctx) {
+        Command command = Serializer.deserialize(stateUpdate);
+        command.execute(this);
+        AsyncContext context = (AsyncContext)ctx;
+        if (context == null) {
+            // This request is sent from other instance.
+            return;
+        }
+        HttpServletResponse response =
+                (HttpServletResponse)(context.getResponse());
+        response.setContentType("text/html");
+        response.setStatus(HttpServletResponse.SC_OK);
+        context.complete();
+    }
+
+    @Override
+    public void flushed(ByteBuffer request, Object ctx) {
+    }
+
+    @Override
+    public void save(OutputStream os) {
+        // No support for snapshot yet.
+    }
+
+    @Override
+    public void restore(InputStream is) {
+        // No support for snapshot yet.
+    }
+
+    @Override
+    public void snapshotDone(String filePath, Object ctx) {
+    }
+
+    @Override
+    public void removed(String peerId, Object ctx) {
+    }
+
+    @Override
+    public void recovering(PendingRequests pendingRequests) {
+        LOG.info("Recovering...");
+        // Returns error for all pending requests.
+        for (Tuple tp : pendingRequests.pendingSends) {
+            AsyncContext context = (AsyncContext)tp.param;
+            HttpServletResponse response =
+                    (HttpServletResponse)(context.getResponse());
+            response.setContentType("text/html");
+            response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+            context.complete();
+        }
+    }
+
+    @Override
+    public void leading(Set<String> activeFollowers, Set<String> clusterMembers)
+    {
+        LOG.info("LEADING with active followers : ");
+        for (String peer : activeFollowers) {
+            LOG.info(" -- {}", peer);
+        }
+        LOG.info("Cluster configuration change : ", clusterMembers.size());
+        for (String peer : clusterMembers) {
+            LOG.info(" -- {}", peer);
+        }
+    }
+
+    @Override
+    public void following(String leader, Set<String> clusterMembers) {
+        LOG.info("FOLLOWING {}", leader);
+        LOG.info("Cluster configuration change : ", clusterMembers.size());
+        for (String peer : clusterMembers) {
+            LOG.info(" -- {}", peer);
+        }
+    }
 }

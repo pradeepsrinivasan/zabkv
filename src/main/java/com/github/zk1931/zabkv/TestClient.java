@@ -31,46 +31,46 @@ import org.slf4j.LoggerFactory;
  */
 public class TestClient {
 
-  private static final Logger LOG = LoggerFactory.getLogger(TestClient.class);
+    private static final Logger LOG = LoggerFactory.getLogger(TestClient.class);
 
-  private String addr;
+    private String addr;
 
-  private HttpClient client = new HttpClient();
+    private HttpClient client = new HttpClient();
 
-  public TestClient() throws Exception {
-    this.client.start();
-  }
-
-  public void put(String uri, String key, String value)
-      throws InterruptedException, TimeoutException, ExecutionException {
-    String json = String.format("{'%s':'%s'}", key, value);
-    Request request = client.newRequest(uri);
-    request.scheme("http");
-    request.method(HttpMethod.PUT);
-    request.content(new StringContentProvider(json));
-    request.send();
-  }
-
-  public void stop() throws Exception {
-    this.client.stop();
-  }
-
-  public static void main(String[] args) throws Exception {
-    // Gets the list of zabkv servers.
-    String strServers = System.getProperty("servers", "localhost:8080");
-    int numWrites = Integer.parseInt(System.getProperty("numWrites", "100"));
-    String[] servers = strServers.split(";");
-    TestClient client = new TestClient();
-    for (int i = 0; i < numWrites; ++i) {
-      for (String server : servers) {
-        try {
-          client.put("http://" + server, server + "_key_" + i, "" + i);
-        } catch (Exception ex) {
-          LOG.info("Caught exception while sending to {}", server);
-        }
-      }
+    public TestClient() throws Exception {
+        this.client.start();
     }
-    client.stop();
-    LOG.info("Test ends.");
-  }
+
+    public void put(String uri, String key, String value)
+            throws InterruptedException, TimeoutException, ExecutionException {
+        String json = String.format("{'%s':'%s'}", key, value);
+        Request request = client.newRequest(uri);
+        request.scheme("http");
+        request.method(HttpMethod.PUT);
+        request.content(new StringContentProvider(json));
+        request.send();
+    }
+
+    public void stop() throws Exception {
+        this.client.stop();
+    }
+
+    public static void main(String[] args) throws Exception {
+        // Gets the list of zabkv servers.
+        String strServers = System.getProperty("servers", "localhost:8080");
+        int numWrites = Integer.parseInt(System.getProperty("numWrites", "100"));
+        String[] servers = strServers.split(";");
+        TestClient client = new TestClient();
+        for (int i = 0; i < numWrites; ++i) {
+            for (String server : servers) {
+                try {
+                    client.put("http://" + server, server + "_key_" + i, "" + i);
+                } catch (Exception ex) {
+                    LOG.info("Caught exception while sending to {}", server);
+                }
+            }
+        }
+        client.stop();
+        LOG.info("Test ends.");
+    }
 }

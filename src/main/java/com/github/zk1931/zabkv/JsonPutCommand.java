@@ -25,20 +25,20 @@ import java.util.HashMap;
  * Command to put key-value pairs to database.
  */
 public final class JsonPutCommand extends Command {
-  private static final long serialVersionUID = 0L;
+    private static final long serialVersionUID = 0L;
 
-  final String json;
+    final String json;
 
-  public JsonPutCommand(String json) {
-    this.json = json;
-  }
+    public JsonPutCommand(String json) {
+        this.json = json;
+    }
 
-  @Override
-  public void execute(Database db) {
-    GsonBuilder builder = new GsonBuilder();
-    Gson gson = builder.create();
-    HashMap<String, byte[]> map =
-      gson.fromJson(json, HashMap.class);
-    db.put(map);
-  }
+    @Override
+    public void execute(Database db) {
+        GsonBuilder builder = new GsonBuilder();
+        Gson gson = builder.create();
+        HashMap<String, byte[]> map =
+                gson.fromJson(json, HashMap.class);
+        db.put(map);
+    }
 }

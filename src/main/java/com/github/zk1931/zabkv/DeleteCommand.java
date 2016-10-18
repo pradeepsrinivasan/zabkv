@@ -21,16 +21,16 @@ package com.github.zk1931.zabkv;
  * Command to delete a key-value pair or all the key-value pairs in database.
  */
 public final class DeleteCommand extends Command {
-  private static final long serialVersionUID = 0L;
+    private static final long serialVersionUID = 0L;
 
-  final String key;
+    final String key;
 
-  public DeleteCommand(String key) {
-    this.key = key;
-  }
+    public DeleteCommand(String key) {
+        this.key = key;
+    }
 
-  @Override
-  public void execute(Database db) {
-    db.delete(this.key);
-  }
+    @Override
+    public void execute(Database db) {
+        db.delete(this.key);
+    }
 }
