@@ -91,7 +91,12 @@ public final class Database {
         Transaction txn = storeEnv.beginExclusiveTransaction();
         final Store store = storeEnv.openStore("KV", StoreConfig.WITHOUT_DUPLICATES, txn);
         ByteIterable val = store.get(txn, StringBinding.stringToEntry(key));
-        return StringBinding.entryToString(val);
+
+        try {
+            return StringBinding.entryToString(val);
+        } finally {
+            txn.flush();
+        }
     }
 
     public void put(final Map<String, String> updates) {
