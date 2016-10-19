@@ -17,8 +17,6 @@
 
 package com.github.zk1931.zabkv;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import java.util.HashMap;
 
 /**
@@ -27,18 +25,18 @@ import java.util.HashMap;
 public final class JsonPutCommand extends Command {
     private static final long serialVersionUID = 0L;
 
-    final String json;
+    final String key;
+    final String value;
 
-    public JsonPutCommand(String json) {
-        this.json = json;
+    public JsonPutCommand(String key, String value) {
+        this.key = key;
+        this.value = value;
     }
 
     @Override
     public void execute(Database db) {
-        GsonBuilder builder = new GsonBuilder();
-        Gson gson = builder.create();
-        HashMap<String, byte[]> map =
-                gson.fromJson(json, HashMap.class);
+        HashMap<String, String> map = new HashMap<>();
+        map.put(key, value);
         db.put(map);
     }
 }

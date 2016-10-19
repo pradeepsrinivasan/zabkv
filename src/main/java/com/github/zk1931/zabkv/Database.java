@@ -17,33 +17,37 @@
 
 package com.github.zk1931.zabkv;
 
+
+import com.github.zk1931.jzab.*;
+import com.github.zk1931.jzab.PendingRequests.Tuple;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import java.io.InputStream;
+import jetbrains.exodus.ByteIterable;
+import jetbrains.exodus.bindings.StringBinding;
+import jetbrains.exodus.env.*;
+import jetbrains.exodus.env.Transaction;
+import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.servlet.AsyncContext;
+import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
-import javax.servlet.AsyncContext;
-import javax.servlet.http.HttpServletResponse;
-import com.github.zk1931.jzab.PendingRequests;
-import com.github.zk1931.jzab.PendingRequests.Tuple;
-import com.github.zk1931.jzab.StateMachine;
-import com.github.zk1931.jzab.Zab;
-import com.github.zk1931.jzab.ZabConfig;
-import com.github.zk1931.jzab.ZabException;
-import com.github.zk1931.jzab.Zxid;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * StateMachine of the ZabKV.
  */
-public final class Database implements StateMachine {
+public final class Database {
     private static final Logger LOG = LoggerFactory.getLogger(Database.class);
+    private final DatabaseStateMachine stateMachine;
+    private final Environment storeEnv;
 
     private Zab zab;
 
@@ -57,23 +61,26 @@ public final class Database implements StateMachine {
     public Database(String serverId, String joinPeer, String logDir) {
         try {
             this.serverId = serverId;
+            String zabCoord = "localhost:" + this.serverId;
+
             if (this.serverId != null && joinPeer == null) {
                 // It's the first server in cluster, joins itself.
-                joinPeer = this.serverId;
+                joinPeer = zabCoord;
             }
-            if (this.serverId != null && logDir == null) {
-                // If user doesn't specify log directory, default one is
-                // serverId in current directory.
-                logDir = this.serverId;
-            }
+
             config.setLogDir(logDir);
+            this.stateMachine = new DatabaseStateMachine(this);
+
             if (joinPeer != null) {
-                zab = new Zab(this, config, this.serverId, joinPeer);
+                zab = new Zab(stateMachine, config, zabCoord, joinPeer);
             } else {
                 // Recovers from log directory.
-                zab = new Zab(this, config);
+                zab = new Zab(stateMachine, config);
             }
             this.serverId = zab.getServerId();
+
+            storeEnv = Environments.newInstance("/tmp/my-db/" + serverId + "/data");
+
         } catch (Exception ex) {
             LOG.error("Caught exception : ", ex);
             throw new RuntimeException();
@@ -81,30 +88,34 @@ public final class Database implements StateMachine {
     }
 
     public String get(String key) {
-        GsonBuilder builder = new GsonBuilder();
-        Gson gson = builder.create();
-        Map<String, Object> map = new HashMap<>();
-        map.put(key, (Object)kvstore.get(key));
-        return gson.toJson(map);
+        Transaction txn = storeEnv.beginExclusiveTransaction();
+        final Store store = storeEnv.openStore("KV", StoreConfig.WITHOUT_DUPLICATES, txn);
+        ByteIterable val = store.get(txn, StringBinding.stringToEntry(key));
+        return StringBinding.entryToString(val);
     }
 
-    public void put(Map<String, byte[]> updates) {
-        kvstore.putAll(updates);
+    public void put(final Map<String, String> updates) {
+        storeEnv.executeInTransaction(new TransactionalExecutable() {
+            @Override
+            public void execute(@NotNull final Transaction txn) {
+                final Store store = storeEnv.openStore("KV", StoreConfig.WITHOUT_DUPLICATES, txn);
+                for ( Map.Entry<String, String> entry : updates.entrySet() ) {
+                    store.put(txn, StringBinding.stringToEntry(entry.getKey()), StringBinding.stringToEntry(entry.getValue()));
+                }
+            }
+        });
+
+//        kvstore.putAll(updates);
     }
 
-    public String getAll() throws IOException {
-        GsonBuilder builder = new GsonBuilder();
-        Gson gson = builder.create();
-        return gson.toJson(kvstore);
-    }
+//    public String getAll() throws IOException {
+//        GsonBuilder builder = new GsonBuilder();
+//        Gson gson = builder.create();
+//        return gson.toJson(kvstore);
+//    }
 
     public void delete(String key) {
-        if (key.equals("")) {
-            // Deletes whole database.
-            this.kvstore.clear();
-        } else {
-            this.kvstore.remove(key);
-        }
+        this.kvstore.remove(key);
     }
 
     public boolean add(Command command, AsyncContext context) {
@@ -121,84 +132,94 @@ public final class Database implements StateMachine {
         return true;
     }
 
-    @Override
-    public ByteBuffer preprocess(Zxid zxid, ByteBuffer message) {
-        LOG.debug("Preprocessing a message: {}", message);
-        return message;
-    }
 
-    @Override
-    public void deliver(Zxid zxid, ByteBuffer stateUpdate, String clientId,
-                        Object ctx) {
-        Command command = Serializer.deserialize(stateUpdate);
-        command.execute(this);
-        AsyncContext context = (AsyncContext)ctx;
-        if (context == null) {
-            // This request is sent from other instance.
-            return;
+    public final static class DatabaseStateMachine implements StateMachine {
+
+        private final Database db;
+
+        public DatabaseStateMachine(Database database) {
+            this.db = database;
         }
-        HttpServletResponse response =
-                (HttpServletResponse)(context.getResponse());
-        response.setContentType("text/html");
-        response.setStatus(HttpServletResponse.SC_OK);
-        context.complete();
-    }
 
-    @Override
-    public void flushed(ByteBuffer request, Object ctx) {
-    }
+        @Override
+        public ByteBuffer preprocess(Zxid zxid, ByteBuffer message) {
+            LOG.debug("Preprocessing a message: {}", message);
+            return message;
+        }
 
-    @Override
-    public void save(OutputStream os) {
-        // No support for snapshot yet.
-    }
-
-    @Override
-    public void restore(InputStream is) {
-        // No support for snapshot yet.
-    }
-
-    @Override
-    public void snapshotDone(String filePath, Object ctx) {
-    }
-
-    @Override
-    public void removed(String peerId, Object ctx) {
-    }
-
-    @Override
-    public void recovering(PendingRequests pendingRequests) {
-        LOG.info("Recovering...");
-        // Returns error for all pending requests.
-        for (Tuple tp : pendingRequests.pendingSends) {
-            AsyncContext context = (AsyncContext)tp.param;
+        @Override
+        public void deliver(Zxid zxid, ByteBuffer stateUpdate, String clientId,
+                            Object ctx) {
+            Command command = Serializer.deserialize(stateUpdate);
+            command.execute(db);
+            AsyncContext context = (AsyncContext) ctx;
+            LOG.info("Deliver executed" );
+            if (context == null) {
+                // This request is sent from other instance.
+                return;
+            }
             HttpServletResponse response =
-                    (HttpServletResponse)(context.getResponse());
+                    (HttpServletResponse) (context.getResponse());
             response.setContentType("text/html");
-            response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+            response.setStatus(HttpServletResponse.SC_OK);
             context.complete();
         }
-    }
 
-    @Override
-    public void leading(Set<String> activeFollowers, Set<String> clusterMembers)
-    {
-        LOG.info("LEADING with active followers : ");
-        for (String peer : activeFollowers) {
-            LOG.info(" -- {}", peer);
+        @Override
+        public void flushed(ByteBuffer request, Object ctx) {
         }
-        LOG.info("Cluster configuration change : ", clusterMembers.size());
-        for (String peer : clusterMembers) {
-            LOG.info(" -- {}", peer);
-        }
-    }
 
-    @Override
-    public void following(String leader, Set<String> clusterMembers) {
-        LOG.info("FOLLOWING {}", leader);
-        LOG.info("Cluster configuration change : ", clusterMembers.size());
-        for (String peer : clusterMembers) {
-            LOG.info(" -- {}", peer);
+        @Override
+        public void save(OutputStream os) {
+            // No support for snapshot yet.
+        }
+
+        @Override
+        public void restore(InputStream is) {
+            // No support for snapshot yet.
+        }
+
+        @Override
+        public void snapshotDone(String filePath, Object ctx) {
+        }
+
+        @Override
+        public void removed(String peerId, Object ctx) {
+        }
+
+        @Override
+        public void recovering(PendingRequests pendingRequests) {
+            LOG.info("Recovering...");
+            // Returns error for all pending requests.
+            for (Tuple tp : pendingRequests.pendingSends) {
+                AsyncContext context = (AsyncContext) tp.param;
+                HttpServletResponse response =
+                        (HttpServletResponse) (context.getResponse());
+                response.setContentType("text/html");
+                response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                context.complete();
+            }
+        }
+
+        @Override
+        public void leading(Set<String> activeFollowers, Set<String> clusterMembers) {
+            LOG.info("LEADING with active followers : ");
+            for (String peer : activeFollowers) {
+                LOG.info(" -- {}", peer);
+            }
+            LOG.info("Cluster configuration change : ", clusterMembers.size());
+            for (String peer : clusterMembers) {
+                LOG.info(" -- {}", peer);
+            }
+        }
+
+        @Override
+        public void following(String leader, Set<String> clusterMembers) {
+            LOG.info("FOLLOWING {}", leader);
+            LOG.info("Cluster configuration change : ", clusterMembers.size());
+            for (String peer : clusterMembers) {
+                LOG.info(" -- {}", peer);
+            }
         }
     }
 }

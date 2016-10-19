@@ -43,12 +43,12 @@ public final class RequestHandler extends HttpServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         // remove the leading slash from the request path and use that as the key.
-        String key = request.getPathInfo().substring(1);
+        String key = request.getHeader("key");
         LOG.info("Got GET request for key {}", key);
-        String value;
-        if (key.equals("")) {
+        String value = null;
+        if (key == null || key.equals("")) {
             // Gets all the key-value pairs.
-            value = db.getAll();
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         } else {
             value = db.get(key);
         }
@@ -68,7 +68,8 @@ public final class RequestHandler extends HttpServlet {
         AsyncContext context = request.startAsync(request, response);
         // remove the leading slash from the request path and use that as the key.
         int length = request.getContentLength();
-        if (length < 0) {
+        String key = request.getHeader("key");
+        if (length < 0 || key == null || key == "" ) {
             // Don't accept requests without content length.
             response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
             response.setContentLength(0);
@@ -77,9 +78,9 @@ public final class RequestHandler extends HttpServlet {
         }
         byte[] value = new byte[length];
         request.getInputStream().read(value);
-        String json = new String(value);
-        LOG.info("Got PUT request : {}", json);
-        JsonPutCommand command = new JsonPutCommand(json);
+        String valueString = new String(value);
+        LOG.info("Got PUT request : {} => {}", key, valueString);
+        JsonPutCommand command = new JsonPutCommand(key, valueString);
         if(!db.add(command, context)) {
             response.setContentType("text/html");
             response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
@@ -92,7 +93,15 @@ public final class RequestHandler extends HttpServlet {
                             HttpServletResponse response)
             throws ServletException, IOException {
         AsyncContext context = request.startAsync(request, response);
-        String key = request.getPathInfo().substring(1);
+        String key = request.getHeader("key");
+        if (key == null || key == "" ) {
+            // Don't accept requests without content length.
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.setContentLength(0);
+            context.complete();
+            return;
+        }
+
         LOG.info("Got DELETE request for key {}", key);
         DeleteCommand command = new DeleteCommand(key);
         if(!db.add(command, context)) {

@@ -1,0 +1,3 @@
+i="$1";
+rm -rf /tmp/my-db/500$i/zab-logs/* /tmp/my-db/500$i/data/*;
+

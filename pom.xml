@@ -88,6 +88,19 @@
             <artifactId>commons-cli</artifactId>
             <version>1.2</version>
         </dependency>
+
+        <dependency>
+            <groupId>org.jetbrains.xodus</groupId>
+            <artifactId>xodus-entity-store</artifactId>
+            <version>1.0.1</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jetbrains.xodus</groupId>
+            <artifactId>xodus-openAPI</artifactId>
+            <version>1.0.1</version>
+        </dependency>
+
     </dependencies>
 </project>
 
