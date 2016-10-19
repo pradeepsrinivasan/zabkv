@@ -17,9 +17,9 @@ See usage:
 
 To start a 3-server cluster, run:
 
-    ./bin/zabkv -port 8080 -addr localhost:5000
-    ./bin/zabkv -port 8081 -addr localhost:5001 -join localhost:5000
-    ./bin/zabkv -port 8082 -addr localhost:5002 -join localhost:5001
+    ./bin/zabkv -port 8080 -addr 5000
+    ./bin/zabkv -port 8081 -addr 5001 -join localhost:5000
+    ./bin/zabkv -port 8082 -addr 5002 -join localhost:5001
 
 Restore server from log directory :
 
