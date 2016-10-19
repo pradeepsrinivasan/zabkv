@@ -55,9 +55,6 @@ public final class Database {
 
     private final ZabConfig config = new ZabConfig();
 
-    private ConcurrentSkipListMap<String, byte[]> kvstore =
-            new ConcurrentSkipListMap<>();
-
     public Database(String serverId, String joinPeer, String logDir) {
         try {
             this.serverId = serverId;
@@ -100,17 +97,13 @@ public final class Database {
     }
 
     public void put(final Map<String, String> updates) {
-        storeEnv.executeInTransaction(new TransactionalExecutable() {
-            @Override
-            public void execute(@NotNull final Transaction txn) {
-                final Store store = storeEnv.openStore("KV", StoreConfig.WITHOUT_DUPLICATES, txn);
-                for ( Map.Entry<String, String> entry : updates.entrySet() ) {
-                    store.put(txn, StringBinding.stringToEntry(entry.getKey()), StringBinding.stringToEntry(entry.getValue()));
-                }
+        storeEnv.executeInTransaction(txn -> {
+            final Store store = storeEnv.openStore("KV", StoreConfig.WITHOUT_DUPLICATES, txn);
+            for ( Map.Entry<String, String> entry : updates.entrySet() ) {
+                store.put(txn, StringBinding.stringToEntry(entry.getKey()), StringBinding.stringToEntry(entry.getValue()));
             }
         });
 
-//        kvstore.putAll(updates);
     }
 
 //    public String getAll() throws IOException {
@@ -120,7 +113,11 @@ public final class Database {
 //    }
 
     public void delete(String key) {
-        this.kvstore.remove(key);
+        storeEnv.executeInTransaction(txn -> {
+            final Store store = storeEnv.openStore("KV", StoreConfig.WITHOUT_DUPLICATES, txn);
+            store.delete(txn, StringBinding.stringToEntry(key));
+        });
+
     }
 
     public boolean add(Command command, AsyncContext context) {
