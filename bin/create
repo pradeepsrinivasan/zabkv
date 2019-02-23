@@ -1,0 +1,4 @@
+i="$1";
+mkdir -p /tmp/my-db/500$i/zab-logs/ /tmp/my-db/500$i/data/;
+chmod -R 777 /tmp/my-db/500$i/zab-logs/ /tmp/my-db/500$i/data/;
+

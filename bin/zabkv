@@ -1,6 +1,4 @@
 #!/bin/bash
 
-
-#mvn compile ${2} ${3} -e exec:java -Dexec.args="$1"
-java -cp ./bin/zabkv-jar-with-dependencies.jar com.github.zk1931.zabkv.Main "$@"
+java -cp "../target/zabkv-0.1.0-SNAPSHOT.jar:../target/lib/*" com.github.zk1931.zabkv.Main "$@"
 

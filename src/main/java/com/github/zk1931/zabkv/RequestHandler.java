@@ -42,23 +42,33 @@ public final class RequestHandler extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        // remove the leading slash from the request path and use that as the key.
-        String key = request.getHeader("key");
-        LOG.info("Got GET request for key {}", key);
-        String value = null;
-        if (key == null || key.equals("")) {
-            // Gets all the key-value pairs.
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-        } else {
-            value = db.get(key);
-        }
-        response.setContentType("text/html");
-        if (value == null) {
-            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-        } else {
-            response.setStatus(HttpServletResponse.SC_OK);
-            response.setContentLength(value.length());
-            response.getOutputStream().write(value.getBytes());
+//        // remove the leading slash from the request path and use that as the key.
+//        String key = request.getHeader("key");
+//        LOG.info("Got GET request for key {}", key);
+//        String value = null;
+//        if (key == null || key.equals("")) {
+//            // Gets all the key-value pairs.
+//            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+//        } else {
+//            value = db.get(key);
+//        }
+//        response.setContentType("text/html");
+//        if (value == null) {
+//            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+//        } else {
+//            response.setStatus(HttpServletResponse.SC_OK);
+//            response.setContentLength(value.length());
+//            response.getOutputStream().write(value.getBytes());
+
+        AsyncContext context = request.startAsync(request, response);
+        String key = System.nanoTime() + "";
+        String value = System.nanoTime() + "";
+
+        JsonPutCommand command = new JsonPutCommand(key, value);
+        if(!db.add(command, context)) {
+            response.setContentType("text/html");
+            response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+            context.complete();
         }
     }
 

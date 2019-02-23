@@ -55,15 +55,17 @@ public final class Database {
 
     private final ZabConfig config = new ZabConfig();
 
-    public Database(String serverId, String joinPeer, String logDir) {
+    public Database(String serverIp, int serverPort, String joinPeer) {
         try {
-            this.serverId = serverId;
-            String zabCoord = "localhost:" + this.serverId;
+            this.serverId = serverPort + "";
+            String zabCoord = serverIp + ":" + serverPort;
 
             if (this.serverId != null && joinPeer == null) {
                 // It's the first server in cluster, joins itself.
                 joinPeer = zabCoord;
             }
+            String dataDir = "/tmp/my-db/" + serverId + "/data";
+            String logDir = "/tmp/my-db/" + serverId + "/log";
 
             config.setLogDir(logDir);
             this.stateMachine = new DatabaseStateMachine(this);
@@ -76,7 +78,7 @@ public final class Database {
             }
             this.serverId = zab.getServerId();
 
-            storeEnv = Environments.newInstance("/tmp/my-db/" + serverId + "/data");
+            storeEnv = Environments.newInstance(dataDir);
 
         } catch (Exception ex) {
             LOG.error("Caught exception : ", ex);

@@ -28,6 +28,7 @@ import org.apache.commons.cli.ParseException;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
+import org.omg.PortableInterceptor.SYSTEM_EXCEPTION;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,9 +37,6 @@ import org.slf4j.LoggerFactory;
  */
 public final class Main {
     private static final Logger LOG = LoggerFactory.getLogger(Main.class);
-
-    private Main() {
-    }
 
     public static void main(String[] args) throws Exception {
         // Options for command arguments.
@@ -50,20 +48,16 @@ public final class Main {
                 .withDescription("port number")
                 .create("port");
 
-        Option addr = OptionBuilder.withArgName("addr")
+        Option ip = OptionBuilder.withArgName("ip")
                 .hasArg(true)
-                .withDescription("addr (ip:port) for Zab.")
-                .create("addr");
+                .isRequired(true)
+                .withDescription("current ip address")
+                .create("ip");
 
         Option join = OptionBuilder.withArgName("join")
                 .hasArg(true)
                 .withDescription("the addr of server to join.")
                 .create("join");
-
-        Option dir = OptionBuilder.withArgName("dir")
-                .hasArg(true)
-                .withDescription("the directory for logs.")
-                .create("dir");
 
         Option help = OptionBuilder.withArgName("h")
                 .hasArg(false)
@@ -72,14 +66,12 @@ public final class Main {
                 .create("h");
 
         options.addOption(port)
-                .addOption(addr)
+                .addOption(ip)
                 .addOption(join)
-                .addOption(dir)
                 .addOption(help);
 
         CommandLineParser parser = new BasicParser();
         CommandLine cmd;
-
 
 
         try {
@@ -94,12 +86,19 @@ public final class Main {
             formatter.printHelp("zabkv", options);
             return;
         }
-        int serverPort = Integer.parseInt(cmd.getOptionValue("port"));
 
+        int zabPort = Integer.parseInt(cmd.getOptionValue("port"));
+        String myIp = cmd.getOptionValue("ip");
 
-        Database db = new Database(cmd.getOptionValue("addr"),
-                cmd.getOptionValue("join"),
-                cmd.getOptionValue("dir"));
+        if ( zabPort < 5000 && zabPort >= 5010 ) {
+            System.err.println("port parameter can have value only between 5000 & 5010");
+            System.exit(1);
+        }
+
+        int serverPort = zabPort%5000 + 8000;
+
+        Database db = new Database(myIp, zabPort,
+                cmd.getOptionValue("join"));
 
         Server server = new Server(serverPort);
         ServletHandler handler = new ServletHandler();
@@ -108,5 +107,6 @@ public final class Main {
         handler.addServletWithMapping(holder, "/*");
         server.start();
         server.join();
+        System.out.println("hi");
     }
 }
